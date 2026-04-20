@@ -192,7 +192,78 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
 // The caller is responsible for calling free(*data_out).
 // Returns 0 on success, -1 on error (file not found, corrupt, etc.).
 int object_read(const ObjectID *id, ObjectType *type_out, void **data_out, size_t *len_out) {
-    // TODO: Implement
-    (void)id; (void)type_out; (void)data_out; (void)len_out;
-    return -1;
+    // Step 1: Build the file path from the hash
+    char path[512];
+    object_path(id, path, sizeof(path));
+
+    // Step 2: Open and read the entire file
+    FILE *f = fopen(path, "rb");
+    if (!f) return -1;
+
+    fseek(f, 0, SEEK_END);
+    long file_size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    if (file_size <= 0) {
+        fclose(f);
+        return -1;
+    }
+
+    void *file_data = malloc((size_t)file_size);
+    if (!file_data) {
+        fclose(f);
+        return -1;
+    }
+
+    if (fread(file_data, 1, (size_t)file_size, f) != (size_t)file_size) {
+        free(file_data);
+        fclose(f);
+        return -1;
+    }
+    fclose(f);
+
+    // Step 3: Verify integrity - recompute hash and compare
+    ObjectID computed;
+    compute_hash(file_data, (size_t)file_size, &computed);
+    if (memcmp(computed.hash, id->hash, HASH_SIZE) != 0) {
+        free(file_data);
+        return -1;
+    }
+
+    // Step 4: Parse the header to extract type and size
+    uint8_t *null_byte = memchr(file_data, '\0', (size_t)file_size);
+    if (!null_byte) {
+        free(file_data);
+        return -1;
+    }
+
+    // Determine the type
+    if (strncmp((char *)file_data, "blob ", 5) == 0) {
+        *type_out = OBJ_BLOB;
+    } else if (strncmp((char *)file_data, "tree ", 5) == 0) {
+        *type_out = OBJ_TREE;
+    } else if (strncmp((char *)file_data, "commit ", 7) == 0) {
+        *type_out = OBJ_COMMIT;
+    } else {
+        free(file_data);
+        return -1;
+    }
+
+    // Step 5: Extract the data portion (after the \0)
+    size_t header_len = (null_byte - (uint8_t *)file_data) + 1;
+    size_t data_len = (size_t)file_size - header_len;
+
+    void *output = malloc(data_len + 1);
+    if (!output) {
+        free(file_data);
+        return -1;
+    }
+    memcpy(output, (uint8_t *)file_data + header_len, data_len);
+    ((char *)output)[data_len] = '\0'; // null-terminate for convenience
+
+    *data_out = output;
+    *len_out = data_len;
+
+    free(file_data);
+    return 0;
 }
