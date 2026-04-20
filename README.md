@@ -27,3 +27,32 @@ To implement `pes checkout <branch>`, the following steps are required:
 - **Partial overlaps:** Some files may be identical between branches (same blob hash), so they don't need to be touched. Efficiently determining which files actually need updating requires comparing tree objects.
 - **Directory conflicts:** A path might be a file on one branch and a directory on another (e.g., `foo` as a file vs. `foo/bar.c`). Handling these transitions requires careful ordering (delete file before creating directory, or vice versa).
 - **Atomicity:** Ideally, checkout should be all-or-nothing. If it fails midway (e.g., permission error), the working directory is in an inconsistent state. Real Git uses a two-phase approach: first verify everything can be written, then perform the updates.
+
+---
+
+### Q5.2: Detecting Dirty Working Directory Conflicts
+
+**Question:** When switching branches, the working directory must be updated to match the target branch's tree. If the user has uncommitted changes to a tracked file, and that file differs between branches, checkout must refuse. Describe how you would detect this "dirty working directory" conflict using only the index and the object store.
+
+**Answer:**
+
+The detection algorithm uses a three-way comparison between the **current index**, the **working directory**, and the **target branch's tree**:
+
+**Step 1: Load required data**
+- Load the current index (`.pes/index`) which contains the blob hash for each staged file.
+- Read the target branch's commit, then load its root tree object. Recursively flatten the tree into a mapping of `path → blob_hash`.
+
+**Step 2: For each file in the current index, check for conflicts**
+For each entry in the index with path `P` and hash `H_index`:
+1. Look up `P` in the target tree to get `H_target`.
+2. If `H_index == H_target`, the file is the same on both branches — no conflict possible regardless of working directory state.
+3. If `H_index != H_target` (file differs between branches):
+   - `stat()` the working directory file to get its current `mtime` and `size`.
+   - Compare these against the index entry's stored `mtime_sec` and `size`.
+   - If they differ, the file has been modified locally → **conflict detected**, refuse checkout.
+   - For extra safety, re-hash the file content and compare against `H_index`. If `H_file != H_index`, the file has uncommitted changes → refuse.
+
+**Step 3: Check for untracked file conflicts**
+- For each path in the target tree that does NOT exist in the current index, check if that path exists in the working directory. If it does, checkout would overwrite an untracked file → refuse.
+
+This approach requires only the index (already in memory) and object store reads (to resolve the target tree), with no expensive full-directory scans beyond targeted `stat()` calls.
