@@ -85,3 +85,41 @@ When you create a new commit in detached HEAD:
 3. **Brute-force scan of object store:** Walk every object in `.pes/objects/`, read those of type `commit`, and check if any commit's hash is not reachable from any branch. This is O(n) in the number of objects but guarantees finding all orphaned commits.
 
 4. **Time-based safety:** Git's garbage collector doesn't delete unreachable objects until they're older than 2 weeks (by default), giving users time to notice and recover. The `gc.pruneExpire` config controls this grace period.
+
+---
+
+### Q6.1: Garbage Collection Algorithm
+
+**Question:** Over time, the object store accumulates unreachable objects — blobs, trees, or commits that no branch points to (directly or transitively). Describe an algorithm to find and delete these objects. What data structure would you use to track "reachable" hashes efficiently? For a repository with 100,000 commits and 50 branches, estimate how many objects you'd need to visit.
+
+**Answer:**
+
+**Algorithm: Mark-and-Sweep Garbage Collection**
+
+The algorithm has two phases, analogous to mark-and-sweep in memory garbage collection:
+
+**Phase 1 — Mark (find all reachable objects):**
+1. Initialize a **hash set** (e.g., a hash table keyed by ObjectID, 32 bytes each) to store all reachable hashes.
+2. For each branch ref file in `.pes/refs/heads/`:
+   - Read the commit hash from the file.
+   - Add it to the reachable set.
+   - Walk the commit's parent chain (following `parent` pointers) until reaching a root commit (no parent) or a commit already in the set:
+     - For each commit, add the commit hash to the reachable set.
+     - Read the commit's `tree` hash, and recursively walk the tree:
+       - Add the tree hash to the reachable set.
+       - For each entry in the tree: if it's a blob, add its hash; if it's a subtree, recurse into it.
+3. Also process any tags or other refs if they exist.
+
+**Phase 2 — Sweep (delete unreachable objects):**
+1. Walk the entire `.pes/objects/` directory (all shard directories `00/` through `ff/`).
+2. For each object file, reconstruct its full hash from the directory name + filename.
+3. If the hash is NOT in the reachable set, delete the file.
+4. Remove empty shard directories.
+
+**Data structure:** A **hash set** (hash table with O(1) lookup) is ideal. Since ObjectIDs are already well-distributed hashes (SHA-256), the first few bytes can serve as the bucket index directly. Memory usage: ~32 bytes per entry + overhead. For 1 million objects, this is ~40 MB — easily fits in RAM.
+
+**Estimate for 100,000 commits and 50 branches:**
+- **Commits visited:** At most 100,000 (each commit visited once due to the hash set dedup). In practice, branches share history, so the total unique commits is already 100,000.
+- **Trees visited:** Each commit has at least one root tree. Assuming an average of 5 tree objects per commit (root + subdirectories), that's ~500,000 tree objects.
+- **Blobs visited:** Assuming an average of 20 files per tree snapshot but heavy deduplication, perhaps ~200,000 unique blobs.
+- **Total objects to visit:** Approximately **800,000 objects** for the mark phase. The sweep phase visits every physical file in the object store (which may be larger if there are unreachable objects).
