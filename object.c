@@ -237,13 +237,17 @@ int object_read(const ObjectID *id, ObjectType *type_out, void **data_out, size_
         return -1;
     }
 
-    // Determine the type
+    // Determine the type and parse declared size
+    size_t declared_size = 0;
     if (strncmp((char *)file_data, "blob ", 5) == 0) {
         *type_out = OBJ_BLOB;
+        declared_size = (size_t)atol((char *)file_data + 5);
     } else if (strncmp((char *)file_data, "tree ", 5) == 0) {
         *type_out = OBJ_TREE;
+        declared_size = (size_t)atol((char *)file_data + 5);
     } else if (strncmp((char *)file_data, "commit ", 7) == 0) {
         *type_out = OBJ_COMMIT;
+        declared_size = (size_t)atol((char *)file_data + 7);
     } else {
         free(file_data);
         return -1;
@@ -252,6 +256,12 @@ int object_read(const ObjectID *id, ObjectType *type_out, void **data_out, size_
     // Step 5: Extract the data portion (after the \0)
     size_t header_len = (null_byte - (uint8_t *)file_data) + 1;
     size_t data_len = (size_t)file_size - header_len;
+
+    // Validate declared size matches actual data
+    if (declared_size != data_len) {
+        free(file_data);
+        return -1;
+    }
 
     void *output = malloc(data_len + 1);
     if (!output) {
