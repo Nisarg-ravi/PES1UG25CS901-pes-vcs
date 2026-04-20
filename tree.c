@@ -192,6 +192,9 @@ static int write_tree_recursive(IndexEntry *entries, int count, const char *pref
         }
     }
 
+    // An empty tree at a non-root level should not happen with valid input
+    if (tree.count == 0) return -1;
+
     // Serialize the tree and write it to the object store
     void *tree_data;
     size_t tree_len;
