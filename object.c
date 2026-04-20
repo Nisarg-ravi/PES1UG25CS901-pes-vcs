@@ -94,9 +94,79 @@ int object_exists(const ObjectID *id) {
 //
 // Returns 0 on success, -1 on error.
 int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out) {
-    // TODO: Implement
-    (void)type; (void)data; (void)len; (void)id_out;
-    return -1;
+    // Step 1: Build the header string "<type> <size>\0"
+    const char *type_str;
+    switch (type) {
+        case OBJ_BLOB:   type_str = "blob";   break;
+        case OBJ_TREE:   type_str = "tree";   break;
+        case OBJ_COMMIT: type_str = "commit"; break;
+        default: return -1;
+    }
+
+    char header[64];
+    int header_len = sprintf(header, "%s %zu", type_str, len);
+    header_len++; // include the null terminator as part of the header
+
+    // Step 2: Build the full object (header + data)
+    size_t total_len = header_len + len;
+    void *full_object = malloc(total_len);
+    if (!full_object) return -1;
+    memcpy(full_object, header, header_len);
+    memcpy((char *)full_object + header_len, data, len);
+
+    // Step 3: Compute SHA-256 hash of the full object
+    compute_hash(full_object, total_len, id_out);
+
+    // Step 4: Check if object already exists (deduplication)
+    if (object_exists(id_out)) {
+        free(full_object);
+        return 0;
+    }
+
+    // Step 5: Create shard directory
+    char hex[HASH_HEX_SIZE + 1];
+    hash_to_hex(id_out, hex);
+    char shard_dir[512];
+    snprintf(shard_dir, sizeof(shard_dir), "%s/%.2s", OBJECTS_DIR, hex);
+    mkdir(shard_dir, 0755);
+
+    // Step 6: Write to a temporary file in the shard directory
+    char tmp_path[512];
+    snprintf(tmp_path, sizeof(tmp_path), "%s/tmp_XXXXXX", shard_dir);
+    int fd = mkstemp(tmp_path);
+    if (fd < 0) {
+        free(full_object);
+        return -1;
+    }
+
+    ssize_t written = write(fd, full_object, total_len);
+    free(full_object);
+    if (written != (ssize_t)total_len) {
+        close(fd);
+        unlink(tmp_path);
+        return -1;
+    }
+
+    // Step 7: fsync the file
+    fsync(fd);
+    close(fd);
+
+    // Step 8: Rename temp file to final path (atomic)
+    char final_path[512];
+    object_path(id_out, final_path, sizeof(final_path));
+    if (rename(tmp_path, final_path) != 0) {
+        unlink(tmp_path);
+        return -1;
+    }
+
+    // Step 9: fsync the shard directory
+    int dir_fd = open(shard_dir, O_RDONLY);
+    if (dir_fd >= 0) {
+        fsync(dir_fd);
+        close(dir_fd);
+    }
+
+    return 0;
 }
 
 // Read an object from the store.
