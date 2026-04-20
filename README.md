@@ -123,3 +123,52 @@ The algorithm has two phases, analogous to mark-and-sweep in memory garbage coll
 - **Trees visited:** Each commit has at least one root tree. Assuming an average of 5 tree objects per commit (root + subdirectories), that's ~500,000 tree objects.
 - **Blobs visited:** Assuming an average of 20 files per tree snapshot but heavy deduplication, perhaps ~200,000 unique blobs.
 - **Total objects to visit:** Approximately **800,000 objects** for the mark phase. The sweep phase visits every physical file in the object store (which may be larger if there are unreachable objects).
+
+---
+
+### Q6.2: GC and Concurrent Commit Race Condition
+
+**Question:** Why is it dangerous to run garbage collection concurrently with a commit operation? Describe a race condition where GC could delete an object that a concurrent commit is about to reference. How does Git's real GC avoid this?
+
+**Answer:**
+
+**Why concurrent GC is dangerous:**
+
+Garbage collection and commit operations both interact with the object store, but they have opposing goals: GC removes objects it deems unreachable, while commit creates new objects that reference existing ones. If these run simultaneously without coordination, GC might delete an object between the time commit decides to reference it and the time the reference is actually written.
+
+**Race condition scenario:**
+
+Consider this interleaved execution:
+
+```
+Time    GC Process                          Commit Process
+────    ──────────                          ──────────────
+T1      Start mark phase                    
+T2      Walk all branches, build            
+        reachable set (blob X is            
+        NOT reachable from any branch)      
+T3                                          User runs: pes add file.txt
+                                            (file.txt has same content as
+                                            the old blob X → deduplication
+                                            means no new object is written,
+                                            just references existing blob X)
+T4                                          Index now references blob X
+T5      Begin sweep phase                   
+T6      Delete blob X (it was               
+        unreachable at mark time T2)        
+T7                                          User runs: pes commit -m "msg"
+                                            Commit references tree → blob X
+                                            But blob X is GONE → corrupt repo!
+```
+
+The fundamental issue: GC's reachability snapshot (taken at T2) becomes stale by the time sweep executes (T6). The commit process created a new reference to an object that GC had already decided to delete.
+
+**How Git's real GC avoids this:**
+
+1. **Grace period (`gc.pruneExpire`):** Git only deletes unreachable objects that are older than 2 weeks (default). Newly created objects are safe because their mtime is recent. This handles most cases — a concurrent commit creates new objects with current timestamps, so even if they're momentarily unreachable, they won't be pruned.
+
+2. **Lock files:** Git uses `.git/gc.pid` lock files to prevent multiple GC processes. The commit process itself doesn't lock against GC, but the grace period protects it.
+
+3. **Packfile atomicity:** When GC repacks objects into packfiles, it writes the new pack atomically (write temp file, then rename). Old loose objects are only deleted AFTER the pack containing them is fully written and referenced.
+
+4. **Object creation before reference update:** Git always writes objects to the store BEFORE updating any ref that points to them. This means an object exists on disk before any branch can reach it. Combined with the grace period, newly created objects are never candidates for deletion.
