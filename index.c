@@ -241,10 +241,15 @@ int index_save(const Index *index) {
 int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out);
 
 int index_add(Index *index, const char *path) {
-    // Step 1: Read the file contents
+    // Step 1: Verify file exists and get metadata
     struct stat st;
     if (stat(path, &st) != 0) {
         fprintf(stderr, "error: '%s': no such file\n", path);
+        return -1;
+    }
+
+    if (!S_ISREG(st.st_mode)) {
+        fprintf(stderr, "error: '%s': not a regular file\n", path);
         return -1;
     }
 
