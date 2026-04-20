@@ -2,6 +2,48 @@
 
 ## Analysis Questions
 
+#Phase 1: Object Storage
+##Screenshot 1A — ./test_objects output showing all tests passing:
+<img width="1229" height="171" alt="image" src="https://github.com/user-attachments/assets/98c33433-6934-47a7-9354-0d6ac882f441" />
+
+
+##Screenshot 1B — find .pes/objects -type f showing sharded directory structure:
+<img width="1001" height="72" alt="image" src="https://github.com/user-attachments/assets/57caa0d5-cd24-4a7a-ac85-b5c70bd3ec3b" />
+
+#Phase 2: Tree Objects
+##Screenshot 2A — ./test_tree output showing all tests passing:
+<img width="719" height="120" alt="image" src="https://github.com/user-attachments/assets/c89b6baf-7084-450f-84d4-a186be4c73bd" />
+
+##Screenshot 2B — xxd of a raw tree object (first 20 lines):
+
+
+#Phase 3: Staging Area
+##Screenshot 3A — pes init → pes add → pes status sequence:
+<img width="1458" height="612" alt="image" src="https://github.com/user-attachments/assets/15219176-4464-4c56-a3d6-7e78741dbc89" />
+
+##Screenshot 3B — cat .pes/index showing the text-format index:
+<img width="1194" height="49" alt="image" src="https://github.com/user-attachments/assets/82401672-6485-4c04-8087-ae6641df14a5" />
+
+#Phase 4: Commits and History
+##Screenshot 4A — pes log output with three commits:
+<img width="1038" height="423" alt="image" src="https://github.com/user-attachments/assets/c98cb836-9556-4519-8217-70e22f9f80e2" />
+
+##Screenshot 4B — find .pes -type f | sort showing object store growth:
+
+<img width="1076" height="340" alt="image" src="https://github.com/user-attachments/assets/0043ac6e-7a4f-4eec-a960-fca95118cbce" />
+
+##Screenshot 4C — cat .pes/refs/heads/main and cat .pes/HEAD showing the reference chain:
+<img width="869" height="72" alt="image" src="https://github.com/user-attachments/assets/1cc0a621-5070-415d-bf7c-3ceb9af683ee" />
+
+
+#Integration Test
+##Final — Full integration test (make test-integration):
+
+<img width="790" height="888" alt="image" src="https://github.com/user-attachments/assets/2a4f9f93-8dc6-47a3-9da4-bdb2dfcc3768" />
+
+
+
+
 ### Q5.1: Implementing `pes checkout <branch>`
 
 **Question:** A branch in Git is just a file in `.git/refs/heads/` containing a commit hash. Creating a branch is creating a file. Given this, how would you implement `pes checkout <branch>` — what files need to change in `.pes/`, and what must happen to the working directory? What makes this operation complex?
