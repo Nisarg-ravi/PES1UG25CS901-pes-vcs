@@ -56,3 +56,32 @@ For each entry in the index with path `P` and hash `H_index`:
 - For each path in the target tree that does NOT exist in the current index, check if that path exists in the working directory. If it does, checkout would overwrite an untracked file → refuse.
 
 This approach requires only the index (already in memory) and object store reads (to resolve the target tree), with no expensive full-directory scans beyond targeted `stat()` calls.
+
+---
+
+### Q5.3: Detached HEAD and Recovering Commits
+
+**Question:** "Detached HEAD" means HEAD contains a commit hash directly instead of a branch reference. What happens if you make commits in this state? How could a user recover those commits?
+
+**Answer:**
+
+**What happens when you commit in detached HEAD state:**
+
+In normal operation, `.pes/HEAD` contains `ref: refs/heads/main`, so commits update the branch file. In detached HEAD state, `.pes/HEAD` contains a raw commit hash (e.g., `a1b2c3d4...`) instead of a symbolic reference.
+
+When you create a new commit in detached HEAD:
+1. The commit is created normally — tree is built, commit object is written to the object store with the current HEAD hash as its parent.
+2. `head_update()` writes the new commit hash directly into `.pes/HEAD` (since there's no `ref:` prefix, it updates HEAD itself).
+3. The new commit exists in the object store and HEAD points to it.
+
+**The danger:** If you then checkout a branch (`pes checkout main`), HEAD is overwritten with `ref: refs/heads/main`. The commits you made in detached state are now **orphaned** — they exist in the object store but no branch reference points to them. They are unreachable through normal traversal.
+
+**How to recover those commits:**
+
+1. **If you remember the hash:** Simply create a new branch pointing to it: write the hash into `.pes/refs/heads/recovery`.
+
+2. **Using a reflog (if implemented):** Git maintains `.git/logs/HEAD` which records every HEAD change. By scanning this log, you can find the hash of the orphaned commit. PES-VCS doesn't implement a reflog, but one could be added by appending to a log file on every HEAD update.
+
+3. **Brute-force scan of object store:** Walk every object in `.pes/objects/`, read those of type `commit`, and check if any commit's hash is not reachable from any branch. This is O(n) in the number of objects but guarantees finding all orphaned commits.
+
+4. **Time-based safety:** Git's garbage collector doesn't delete unreachable objects until they're older than 2 weeks (by default), giving users time to notice and recover. The `gc.pruneExpire` config controls this grace period.
