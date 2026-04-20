@@ -160,8 +160,7 @@ int index_load(Index *index) {
         entry->mode = mode;
         entry->mtime_sec = mtime;
         entry->size = size;
-        strncpy(entry->path, path, sizeof(entry->path) - 1);
-        entry->path[sizeof(entry->path) - 1] = '\0';
+        snprintf(entry->path, sizeof(entry->path), "%s", path);
 
         if (hex_to_hash(hex, &entry->hash) != 0) {
             continue; // Skip entries with invalid hashes
@@ -192,25 +191,28 @@ static int cmp_index_entries(const void *a, const void *b) {
 }
 
 int index_save(const Index *index) {
-    // Create a mutable copy to sort
-    Index sorted = *index;
-    qsort(sorted.entries, sorted.count, sizeof(IndexEntry), cmp_index_entries);
+    // Create a heap-allocated mutable copy to sort (Index is too large for stack)
+    Index *sorted = malloc(sizeof(Index));
+    if (!sorted) return -1;
+    memcpy(sorted, index, sizeof(Index));
+    qsort(sorted->entries, sorted->count, sizeof(IndexEntry), cmp_index_entries);
 
     // Write to a temporary file
     const char *tmp_path = INDEX_FILE ".tmp";
     FILE *f = fopen(tmp_path, "w");
-    if (!f) return -1;
+    if (!f) { free(sorted); return -1; }
 
-    for (int i = 0; i < sorted.count; i++) {
+    for (int i = 0; i < sorted->count; i++) {
         char hex[HASH_HEX_SIZE + 1];
-        hash_to_hex(&sorted.entries[i].hash, hex);
+        hash_to_hex(&sorted->entries[i].hash, hex);
         fprintf(f, "%o %s %lu %u %s\n",
-                sorted.entries[i].mode,
+                sorted->entries[i].mode,
                 hex,
-                (unsigned long)sorted.entries[i].mtime_sec,
-                sorted.entries[i].size,
-                sorted.entries[i].path);
+                (unsigned long)sorted->entries[i].mtime_sec,
+                sorted->entries[i].size,
+                sorted->entries[i].path);
     }
+    free(sorted);
 
     // Flush and sync to ensure data reaches disk
     fflush(f);
@@ -296,8 +298,7 @@ int index_add(Index *index, const char *path) {
         entry->mode = mode;
         entry->mtime_sec = (uint64_t)st.st_mtime;
         entry->size = (uint32_t)st.st_size;
-        strncpy(entry->path, path, sizeof(entry->path) - 1);
-        entry->path[sizeof(entry->path) - 1] = '\0';
+        snprintf(entry->path, sizeof(entry->path), "%s", path);
     }
 
     // Step 5: Save the index
