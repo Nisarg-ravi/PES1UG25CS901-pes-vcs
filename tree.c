@@ -150,6 +150,7 @@ static int write_tree_recursive(IndexEntry *entries, int count, const char *pref
 
         if (!slash) {
             // Direct file entry at this level
+            if (tree.count >= MAX_TREE_ENTRIES) return -1;
             TreeEntry *te = &tree.entries[tree.count++];
             te->mode = entries[i].mode;
             te->hash = entries[i].hash;
@@ -181,6 +182,7 @@ static int write_tree_recursive(IndexEntry *entries, int count, const char *pref
             }
 
             // Add directory entry to current tree
+            if (tree.count >= MAX_TREE_ENTRIES) return -1;
             TreeEntry *te = &tree.entries[tree.count++];
             te->mode = MODE_DIR;
             te->hash = subtree_id;
