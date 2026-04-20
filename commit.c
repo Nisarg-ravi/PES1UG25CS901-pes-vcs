@@ -194,11 +194,12 @@ int head_update(const ObjectID *new_commit) {
 //
 // Returns 0 on success, -1 on error.
 int commit_create(const char *message, ObjectID *commit_id_out) {
-    // Validate message is not empty
+    // Validate inputs
     if (!message || message[0] == '\0') {
         fprintf(stderr, "error: commit message cannot be empty\n");
         return -1;
     }
+    if (!commit_id_out) return -1;
 
     // Step 1: Build a tree from the current index
     ObjectID tree_id;
