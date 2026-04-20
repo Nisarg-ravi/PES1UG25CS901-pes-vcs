@@ -201,7 +201,7 @@ int commit_create(const char *message, ObjectID *commit_id_out) {
         return -1;
     }
 
-    // Step 2: Read current HEAD as parent (may not exist for first commit)
+    // Step 2: Prepare commit struct and read current HEAD as parent
     Commit commit;
     memset(&commit, 0, sizeof(commit));
     commit.tree = tree_id;
