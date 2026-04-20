@@ -135,6 +135,7 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
     snprintf(tmp_path, sizeof(tmp_path), "%s/tmp_XXXXXX", shard_dir);
     int fd = mkstemp(tmp_path);
     if (fd < 0) {
+        perror("object_write: mkstemp");
         free(full_object);
         return -1;
     }
@@ -155,6 +156,7 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
     char final_path[512];
     object_path(id_out, final_path, sizeof(final_path));
     if (rename(tmp_path, final_path) != 0) {
+        perror("object_write: rename");
         unlink(tmp_path);
         return -1;
     }
