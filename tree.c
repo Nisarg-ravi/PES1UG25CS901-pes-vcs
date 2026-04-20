@@ -136,6 +136,12 @@ static int write_tree_recursive(IndexEntry *entries, int count, const char *pref
 
     int i = 0;
     while (i < count) {
+        // Skip entries that don't belong to this prefix level
+        if (strncmp(entries[i].path, prefix, prefix_len) != 0) {
+            i++;
+            continue;
+        }
+
         // Get the path relative to the current prefix
         const char *rel_path = entries[i].path + prefix_len;
 
