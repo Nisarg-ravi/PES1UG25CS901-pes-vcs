@@ -17,6 +17,9 @@
 ##Screenshot 2B — xxd of a raw tree object (first 20 lines):
 <img width="1410" height="226" alt="image" src="https://github.com/user-attachments/assets/bbec91a4-7d4c-43ec-8d51-945818b87bcc" />
 
+<img width="890" height="389" alt="image" src="https://github.com/user-attachments/assets/a44e5a92-9b0d-4e96-88cc-9587a554fe19" />
+
+
 
 #Phase 3: Staging Area
 ##Screenshot 3A — pes init → pes add → pes status sequence:
