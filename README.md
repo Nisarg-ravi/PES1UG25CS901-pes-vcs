@@ -15,6 +15,7 @@
 <img width="719" height="120" alt="image" src="https://github.com/user-attachments/assets/c89b6baf-7084-450f-84d4-a186be4c73bd" />
 
 ##Screenshot 2B — xxd of a raw tree object (first 20 lines):
+<img width="1410" height="226" alt="image" src="https://github.com/user-attachments/assets/bbec91a4-7d4c-43ec-8d51-945818b87bcc" />
 
 
 #Phase 3: Staging Area
